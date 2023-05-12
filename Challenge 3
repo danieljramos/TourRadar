@@ -1,0 +1,64 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import datetime as dt
+from sklearn.linear_model import LinearRegression
+from scipy.stats import f_oneway
+from scipy.stats import ttest_ind
+from scipy.stats import zscore
+
+data = pd.read_csv('C://Users/daniy/Documents/TourRadar/ab_test_analysis TourRadar - ab_test_analysis.csv')
+data['CR'] = data['conversions'] / data['visits']
+# Find outliers and remove them
+z_score = zscore(data['visits'])
+threshold = 3
+outliers = np.abs(z_score) > threshold
+plt.scatter(data['date'][outliers], data['visits'][outliers], color='r', label='Outlier')
+plt.scatter(data['date'][~outliers], data['visits'][~outliers], color='b', label='Non-outlier')
+plt.legend()
+plt.xlabel('Date')
+plt.ylabel('Visits')
+plt.show()
+data = data[z_score <= threshold]
+
+#apply the statistics
+countries = ['Australia', 'Canada', 'USA', 'UK', 'Rest of World']
+devices = ['Mobile', 'Desktop', 'Tablet']
+browsers = ['Chrome', 'Safari', 'Other']
+no_estadistico = []
+estadistico = []
+no = {}
+si = {} 
+
+for i, country in enumerate(countries):
+    for j, device in enumerate(devices):
+        for k, browser in enumerate(browsers):
+            data_country = data.loc[data['location'] == country]
+            data_device = data_country.loc[data_country['device'] == device]
+            data_browser = data_device.loc[data_device['browser'] == browser]
+            version_0 = data_browser.loc[data_browser['version'] == 0]['CR']
+            version_1 = data_browser.loc[data_browser['version'] == 1]['CR']
+            version_2 = data_browser.loc[data_browser['version'] == 2]['CR']
+            f_statistic, p_value = f_oneway(version_0, version_1, version_2)
+            combination = country+'-'+device+'-'+browser
+            if p_value > 0.05:
+                no[combination] = p_value
+            else:
+                data_browser = data_browser.groupby(['version']).agg({'visits': 'sum', 'conversions': 'sum'}).reset_index()
+                data_browser ['CR'] = data_browser['conversions']/ data_browser['visits']
+                version_0 = data_browser.loc[data_browser['version'] == 0]['CR']
+                version_1 = data_browser.loc[data_browser['version'] == 1]['CR']
+                version_2 = data_browser.loc[data_browser['version'] == 2]['CR']
+                max_cr = max(version_0.iloc[0], version_1.iloc[0], version_2.iloc[0])
+                
+                if max_cr == version_0.iloc[0]:
+                    max_version = 'version_0'
+                elif max_cr == version_1.iloc[0]:
+                    max_version = 'version_1'
+                else:
+                    max_version = 'version_2'
+                combination = combination + '-'+ max_version
+                si[combination] = max_cr
+            print(f"p-value_Anova: {p_value:.3f}")
+
+           
